@@ -21,7 +21,7 @@ import io.airbyte.cdk.state.CheckpointManager
 import io.airbyte.cdk.state.MockStreamManager
 import io.airbyte.cdk.state.MockStreamsManager
 import io.airbyte.cdk.state.StreamsManager
-import io.airbyte.cdk.write.DestinationWriteOperation
+import io.airbyte.cdk.write.DestinationWriter
 import io.airbyte.cdk.write.StreamLoader
 import io.micronaut.context.annotation.Factory
 import io.micronaut.context.annotation.Primary
@@ -196,11 +196,12 @@ class DestinationTaskLauncherTest {
     @Singleton
     @Primary
     @Requires(env = ["DestinationTaskLauncherTest"])
-    class MockCheckpointManager : CheckpointManager<DestinationStream, CheckpointMessage> {
+    class MockCheckpointManager :
+        CheckpointManager<DestinationStream.Descriptor, CheckpointMessage> {
         val hasBeenFlushed = Channel<Unit>()
 
         override fun addStreamCheckpoint(
-            key: DestinationStream,
+            key: DestinationStream.Descriptor,
             index: Long,
             checkpointMessage: CheckpointMessage
         ) {
@@ -208,7 +209,7 @@ class DestinationTaskLauncherTest {
         }
 
         override fun addGlobalCheckpoint(
-            keyIndexes: List<Pair<DestinationStream, Long>>,
+            keyIndexes: List<Pair<DestinationStream.Descriptor, Long>>,
             checkpointMessage: CheckpointMessage
         ) {
             TODO("Not needed")
@@ -219,7 +220,7 @@ class DestinationTaskLauncherTest {
         }
     }
 
-    class MockDestinationWrite : DestinationWriteOperation {
+    class MockDestinationWrite : DestinationWriter {
         override fun getStreamLoader(stream: DestinationStream): StreamLoader {
             return object : StreamLoader {
                 override val stream: DestinationStream = stream
@@ -299,7 +300,9 @@ class DestinationTaskLauncherTest {
         // Verify incomplete batch triggers process batch
         val incompleteBatch = BatchEnvelope(MockBatch(Batch.State.PERSISTED), range)
         launcher.handleNewBatch(streamLoader, incompleteBatch)
-        Assertions.assertTrue(streamsManager.getManager(stream1).areRecordsPersistedUntil(100L))
+        Assertions.assertTrue(
+            streamsManager.getManager(stream1.descriptor).areRecordsPersistedUntil(100L)
+        )
         val batchReceived = processBatchTaskFactory.hasRun.receive()
         Assertions.assertEquals(incompleteBatch, batchReceived)
 
@@ -308,7 +311,8 @@ class DestinationTaskLauncherTest {
         launcher.handleNewBatch(streamLoader, completeBatch)
         delay(1000)
         Assertions.assertTrue(closeStreamTaskFactory.hasRun.tryReceive().isFailure)
-        (streamsManager.getManager(stream1) as MockStreamManager).mockBatchProcessingComplete(true)
+        (streamsManager.getManager(stream1.descriptor) as MockStreamManager)
+            .mockBatchProcessingComplete(true)
 
         // Verify complete batch w/ batch processing complete triggers close stream
         launcher.handleNewBatch(streamLoader, completeBatch)
@@ -329,11 +333,11 @@ class DestinationTaskLauncherTest {
         val hasRun = teardownTaskFactory.hasRun.tryReceive()
         Assertions.assertTrue(hasRun.isFailure)
         checkpointManager.hasBeenFlushed.receive() // Stream1 close triggered flush
-        streamsManager.getManager(stream1).markClosed()
+        streamsManager.getManager(stream1.descriptor).markClosed()
         delay(1000)
         val hasRun2 = teardownTaskFactory.hasRun.tryReceive()
         Assertions.assertTrue(hasRun2.isFailure)
-        streamsManager.getManager(stream2).markClosed()
+        streamsManager.getManager(stream2.descriptor).markClosed()
         teardownTaskFactory.hasRun.receive()
         Assertions.assertTrue(true)
 

@@ -4,10 +4,9 @@
 
 package io.airbyte.cdk.task
 
-import io.airbyte.cdk.command.DefaultWriteConfiguration
+import io.airbyte.cdk.command.DestinationConfiguration
 import io.airbyte.cdk.command.DestinationStream
 import io.airbyte.cdk.command.MockCatalogFactory.Companion.stream1
-import io.airbyte.cdk.command.WriteConfiguration
 import io.airbyte.cdk.data.NullValue
 import io.airbyte.cdk.file.FileReader
 import io.airbyte.cdk.file.FileWriter
@@ -22,6 +21,7 @@ import io.airbyte.cdk.message.StreamCompleteWrapped
 import io.airbyte.cdk.message.StreamRecordWrapped
 import io.airbyte.cdk.write.StreamLoader
 import io.micronaut.context.annotation.Factory
+import io.micronaut.context.annotation.Primary
 import io.micronaut.context.annotation.Requires
 import io.micronaut.test.extensions.junit5.annotation.MicronautTest
 import jakarta.inject.Inject
@@ -132,8 +132,9 @@ class SpillToDiskTaskTest {
     }
 
     @Singleton
+    @Primary
     @Requires(env = ["SpillToDiskTaskTest"])
-    class MockWriteConfiguration : DefaultWriteConfiguration(), WriteConfiguration {
+    class MockWriteConfiguration : DestinationConfiguration() {
         override val recordBatchSizeBytes: Long = 1024L
         override val tmpFileDirectory: Path = Path.of("/tmp-test")
         override val firstStageTmpFilePrefix: String = "spilled"
@@ -159,7 +160,7 @@ class SpillToDiskTaskTest {
                         sizeBytes = 8,
                         record =
                             DestinationRecord(
-                                stream = stream1,
+                                stream = stream1.descriptor,
                                 data = NullValue,
                                 emittedAtMs = 0,
                                 meta = null,
